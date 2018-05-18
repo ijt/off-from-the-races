@@ -1,3 +1,4 @@
+// The pipeline program is from https://blog.golang.org/pipelines.
 package main
 
 import (
