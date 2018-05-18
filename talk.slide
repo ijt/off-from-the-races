@@ -33,7 +33,7 @@ Pretty good, but could be better. Concurrency logic is tangled with app logic.
 
 * Second try, using a higher-order function. Untangled!
 
-	func conc(fs []func()) {
+	func run(fs []func()) {
 		var wg sync.WaitGroup
 		for _, f := range fs {
 			f := f
@@ -56,7 +56,7 @@ Pretty good, but could be better. Concurrency logic is tangled with app logic.
 			http.Get(url)
 		})
 	}
-	conc(fs)
+	run(fs)
 
 Better. App logic is clarified. Tricky concurrency can be debugged separately.
 
@@ -92,8 +92,8 @@ What it doesn't do is untangle the concurrency logic from the app logic.
 	    fmt.Println("Successfully fetched all URLs.")
 	}
 
-* Untangle it the same way
-	func conc(fs []func() error) error {
+* Untangled:
+	func run(fs []func() error) error {
 		var g errgroup.Group
 		for _, f := range fs {
 			g.Go(f)
@@ -112,8 +112,11 @@ What it doesn't do is untangle the concurrency logic from the app logic.
 		return err
 	    })
 	}
-	if err := conc(fs); err == nil {
+	if err := run(fs); err == nil {
 	    fmt.Println("Successfully fetched all URLs.")
 	}
 
 * Pipelines
+[[https://blog.golang.org/pipelines]]
+
+
