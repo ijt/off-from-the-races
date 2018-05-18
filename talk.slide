@@ -1,0 +1,119 @@
+Off from the races!
+Concurrency patterns using higher-order functions
+
+Issac Trotts
+SWE on Google App Engine runtimes team
+issactrotts@google.com
+
+* Go makes concurrency easy, doesn't it?
+
+Let's try fetching some URLs concurrently and wait for them all:
+
+	var wg sync.WaitGroup
+	var urls = []string{
+		"http://www.golang.org/",
+		"http://www.google.com/",
+		"http://www.somestupidname.com/",
+	}
+	for _, url := range urls {
+		// Increment the WaitGroup counter.
+		wg.Add(1)
+		// Launch a goroutine to fetch the URL.
+		go func(url string) {
+			// Decrement the counter when the goroutine completes.
+			defer wg.Done()
+			// Fetch the URL.
+			http.Get(url)
+		}(url)
+	}
+	// Wait for all HTTP fetches to complete.
+	wg.Wait() 
+
+Pretty good, but could be better. Concurrency logic is tangled with app logic.
+
+* Second try, using a higher-order function. Untangled!
+
+	func conc(fs []func()) {
+		var wg sync.WaitGroup
+		for _, f := range fs {
+			f := f
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				f()
+			}()
+		}
+		wg.Wait()
+	}
+	var urls = []string{
+		"http://www.golang.org/",
+		"http://www.google.com/",
+	}
+	var fs []func()
+	for _, url := range urls {
+		url := url
+		fs = append(fs, func() {
+			http.Get(url)
+		})
+	}
+	conc(fs)
+
+Better. App logic is clarified. Tricky concurrency can be debugged separately.
+
+* How is this different from Dave Cheney's errgroup package?
+
+[[https://godoc.org/golang.org/x/sync/errgroup]]
+"Package errgroup provides synchronization, error propagation, and Context cancelation for groups of goroutines working on subtasks of a common task."
+
+What it doesn't do is untangle the concurrency logic from the app logic.
+
+* JustErrors example from errgroup doc. Still tangled.
+
+	var g errgroup.Group <-----------------------------
+	var urls = []string{
+	    "http://www.golang.org/",
+	    "http://www.google.com/",
+	    "http://www.somestupidname.com/",
+	}
+	for _, url := range urls {
+	    // Launch a goroutine to fetch the URL.
+	    url := url // https://golang.org/doc/faq#closures_and_goroutines
+	    g.Go(func() error { <-----------------------------
+		// Fetch the URL.
+		resp, err := http.Get(url)
+		if err == nil {
+		    resp.Body.Close()
+		}
+		return err
+	    })
+	}
+	// Wait for all HTTP fetches to complete.
+	if err := g.Wait(); err == nil { <-----------------------------
+	    fmt.Println("Successfully fetched all URLs.")
+	}
+
+* Untangle it the same way
+	func conc(fs []func() error) error {
+		var g errgroup.Group
+		for _, f := range fs {
+			g.Go(f)
+		}
+		return g.Wait()
+	}
+	var urls = []string{ ... }
+	var fs []func() error
+	for _, url := range urls {
+	    url := url // https://golang.org/doc/faq#closures_and_goroutines
+	    fs = append(fs, func() error {
+		resp, err := http.Get(url)
+		if err == nil {
+		    resp.Body.Close()
+		}
+		return err
+	    })
+	}
+	if err := conc(fs); err == nil {
+	    fmt.Println("Successfully fetched all URLs.")
+	}
+
+* Pipelines
