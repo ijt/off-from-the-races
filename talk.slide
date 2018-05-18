@@ -29,9 +29,29 @@ Let's try fetching some URLs concurrently and wait for them all:
 	// Wait for all HTTP fetches to complete.
 	wg.Wait() 
 
-Pretty good, but could be better. Concurrency logic is tangled with app logic.
+The concurrency pattern is tangled with the app logic.
 
-* Second try, using a higher-order function. Untangled!
+* What if we could write it like this?
+
+What to do:
+
+	var urls = []string{
+		"http://www.golang.org/",
+		"http://www.google.com/",
+		"http://www.somestupidname.com/",
+	}
+	var fs []func()
+	for _, url := range urls {
+		url := url
+		fs = append(fs, func() {
+			http.Get(url)
+		})
+	}
+	run(fs)
+
+* We can.
+
+How to do it:
 
 	func run(fs []func()) {
 		var wg sync.WaitGroup
@@ -45,27 +65,16 @@ Pretty good, but could be better. Concurrency logic is tangled with app logic.
 		}
 		wg.Wait()
 	}
-	var urls = []string{
-		"http://www.golang.org/",
-		"http://www.google.com/",
-	}
-	var fs []func()
-	for _, url := range urls {
-		url := url
-		fs = append(fs, func() {
-			http.Get(url)
-		})
-	}
-	run(fs)
 
-Better. App logic is clarified. Tricky concurrency can be debugged separately.
+App logic is clarified.
+Tricky concurrency can be tested and debugged separately.
 
 * How is this different from Dave Cheney's errgroup package?
 
 [[https://godoc.org/golang.org/x/sync/errgroup]]
 "Package errgroup provides synchronization, error propagation, and Context cancelation for groups of goroutines working on subtasks of a common task."
 
-What it doesn't do is untangle the concurrency logic from the app logic.
+What it doesn't do is untangle concurrency logic from app logic.
 
 * JustErrors example from errgroup doc. Still tangled.
 
@@ -92,7 +101,30 @@ What it doesn't do is untangle the concurrency logic from the app logic.
 	    fmt.Println("Successfully fetched all URLs.")
 	}
 
-* Untangled:
+* Let's untangle it (part I):
+
+What to do:
+
+	var urls = []string{ ... }
+	var fs []func() error
+	for _, url := range urls {
+		url := url
+		fs = append(fs, func() error {
+			resp, err := http.Get(url)
+			if err == nil {
+				resp.Body.Close()
+			}
+			return err
+		})
+	}
+	if err := run(fs); err == nil {
+	    fmt.Println("Successfully fetched all URLs.")
+	}
+
+* Let's untangle it (part II):
+
+How to do it:
+
 	func run(fs []func() error) error {
 		var g errgroup.Group
 		for _, f := range fs {
@@ -100,75 +132,93 @@ What it doesn't do is untangle the concurrency logic from the app logic.
 		}
 		return g.Wait()
 	}
-	var urls = []string{ ... }
-	var fs []func() error
-	for _, url := range urls {
-	    url := url // https://golang.org/doc/faq#closures_and_goroutines
-	    fs = append(fs, func() error {
-		resp, err := http.Get(url)
-		if err == nil {
-		    resp.Body.Close()
-		}
-		return err
-	    })
-	}
-	if err := run(fs); err == nil {
-	    fmt.Println("Successfully fetched all URLs.")
-	}
 
-* Pipelines
+* Pipelines: linear chain (page 1)
 [[https://blog.golang.org/pipelines]]
 
-	func merge(cs ...<-chan int) <-chan int {
-	    var wg sync.WaitGroup
-	    out := make(chan int)
+	func main() {
+		// Set up the pipeline.
+		c := gen(2, 3)
+		out := sq(c)
 
-	    // Start an output goroutine for each input channel in cs.  output
-	    // copies values from c to out until c is closed, then calls wg.Done.
-	    output := func(c <-chan int) {
-		for n := range c {
-		    out <- n
+		// Consume the output: 4, 9
+		for x := range c {
+			fmt.Println(x)
 		}
-		wg.Done()
-	    }
-	    wg.Add(len(cs))
-	    for _, c := range cs {
-		go output(c)
-	    }
-
-	    // Start a goroutine to close out once all the output goroutines are
-	    // done.  This must start after the wg.Add call.
-	    go func() {
-		wg.Wait()
-		close(out)
-	    }()
-	    return out
 	}
 
-* Pipelines take 2
+* Pipelines: linear chain (page 2)
 
-	func merge(cs ...<-chan int) <-chan int {
-	    var wg sync.WaitGroup
-	    out := make(chan int)
-
-	    // Start an output goroutine for each input channel in cs.  output
-	    // copies values from c to out until c is closed, then calls wg.Done.
-	    output := func(c <-chan int) {
-		for n := range c {
-		    out <- n
-		}
-		wg.Done()
-	    }
-	    wg.Add(len(cs))
-	    for _, c := range cs {
-		go output(c)
-	    }
-
-	    // Start a goroutine to close out once all the output goroutines are
-	    // done.  This must start after the wg.Add call.
-	    go func() {
-		wg.Wait()
-		close(out)
-	    }()
-	    return out
+	func gen(nums ...int) <-chan int {
+		out := make(chan int)
+		go func() {
+			for _, n := range nums {
+				out <- n
+			}
+			close(out)
+		}()
+		return out
 	}
+	
+	func sq(in <-chan int) <-chan int {
+		out := make(chan int)
+		go func() {
+			for n := range in {
+				out <- n * n
+			}
+			close(out)
+		}()
+		return out
+	}
+
+* Pipelines: linear chain (page 3)
+Slightly more interesting main runs `sq` twice:
+
+	func main() {
+		// Set up the pipeline and consume the output:
+		for x := range sq(sq(gen(2, 3))) {
+			fmt.Println(x)
+		}
+	}
+
+
+* Pipelines: linear chain untangled (page 1)
+
+What do to:
+
+	func main() {
+		sq := func(x int) int { return x * x }
+		for x := range mapPipeline([]int{2, 3}, sq, sq) {
+			fmt.Println(x)
+		}
+	}
+
+* Pipelines: linear chain untangled (page 2)
+
+How to do it:
+
+	// TESTME
+	func mapPipeline(xs []int, fs ...[]func(int) int) chan int {
+		fout := make(chan int)
+		go func() {
+			for x := range xs {
+				out <- x
+			}
+			close out
+		}()
+
+		for _, f := range fs {
+			fin = fout
+			go func () {
+				for x := range fin {
+					fout <- f(x)
+				}
+				close fout
+			}()
+			fout := make(chan int)
+		}
+		return fout
+	}
+
+
+
