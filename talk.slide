@@ -202,20 +202,20 @@ How to do it:
 		fout := make(chan int)
 		go func() {
 			for x := range xs {
-				out <- x
+				fout <- x
 			}
-			close out
+			close fout
 		}()
 
 		for _, f := range fs {
-			fin = fout
+			fin := fout
+			fout = make(chan int)
 			go func () {
 				for x := range fin {
 					fout <- f(x)
 				}
 				close fout
 			}()
-			fout := make(chan int)
 		}
 		return fout
 	}
