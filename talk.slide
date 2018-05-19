@@ -188,7 +188,8 @@ What do to:
 
 	func main() {
 		sq := func(x int) int { return x * x }
-		for x := range mapPipeline([]int{2, 3}, sq, sq) {
+		inc := func(x int) int { return x + 1 }
+		for x := range mapPipeline([]int{2, 3}, sq, inc) {
 			fmt.Println(x)
 		}
 	}
@@ -208,8 +209,9 @@ How to do it:
 			}()
 			return out
 		}
-		in := mapPipeline(xs, fs[1:]...)
-		f := fs[0]
+
+		in := mapPipeline(xs, fs[:len(fs)-1]...)
+		f := fs[len(fs)-1]
 		out := make(chan int)
 		go func() {
 			for x := range in {
@@ -219,3 +221,4 @@ How to do it:
 		}()
 		return out
 	}
+
