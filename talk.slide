@@ -208,7 +208,6 @@ How to do it:
 			}()
 			return out
 		}
-
 		in := mapPipeline(xs, fs[1:]...)
 		f := fs[0]
 		out := make(chan int)
@@ -220,6 +219,3 @@ How to do it:
 		}()
 		return out
 	}
-
-
-
