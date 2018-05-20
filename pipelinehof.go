@@ -2,28 +2,39 @@ package main
 
 import (
 	"fmt"
+	"time"
 )
 
 func main() {
 	sq := func(x int) int { return x * x }
 	inc := func(x int) int { return x + 1 }
-	for x := range mapPipeline(gen(2, 3), sq, inc) {
+	done := make(chan interface{})
+	go func() {
+		time.Sleep(time.Millisecond)
+		close(done)
+	}()
+	for x := range mapPipeline(done, gen(2, 3), sq, inc) {
 		fmt.Println(x)
 	}
 }
 
-func mapPipeline(in <-chan int, fs ...func(int) int) <-chan int {
+func mapPipeline(done <-chan interface{}, in <-chan int, fs ...func(int) int) <-chan int {
 	if len(fs) == 0 {
 		return in
 	}
-	in = mapPipeline(in, fs[:len(fs)-1]...)
+	in = mapPipeline(done, in, fs[:len(fs)-1]...)
 	f := fs[len(fs)-1]
 	out := make(chan int)
 	go func() {
+		defer close(out)
 		for x := range in {
-			out <- f(x)
+			select {
+			case <-done:
+				return
+			default:
+				out <- f(x)
+			}
 		}
-		close(out)
 	}()
 	return out
 }
