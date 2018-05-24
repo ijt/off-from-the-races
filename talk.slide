@@ -257,3 +257,18 @@ How to do it:
 		return out
 	}
 
+* MapReduce
+
+MapReduce is often used to run big data processing jobs on clusters of machines.
+Maybe it can also be useful on single machines with a few cores.
+
+http://marcio.io/2015/07/cheap-mapreduce-in-go/
+https://blog.gopheracademy.com/advent-2015/glow-map-reduce-for-golang/
+https://github.com/chrislusf/gleam
+
+* Where to go from here?
+
+Find out which concurrency patterns are well-expressed in this paradigm.
+Make it into a library.
+See what Go 2 makes possible in this area.
+
