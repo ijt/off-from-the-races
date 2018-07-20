@@ -78,7 +78,7 @@ What it doesn't do is untangle concurrency logic from app logic.
 
 * JustErrors example from errgroup doc. Still tangled.
 
-	var g errgroup.Group <-----------------------------
+	var g errgroup.Group // <-----------------------------
 	var urls = []string{
 	    "http://www.golang.org/",
 	    "http://www.google.com/",
@@ -87,17 +87,17 @@ What it doesn't do is untangle concurrency logic from app logic.
 	for _, url := range urls {
 	    // Launch a goroutine to fetch the URL.
 	    url := url // https://golang.org/doc/faq#closures_and_goroutines
-	    g.Go(func() error { <-----------------------------
-		// Fetch the URL.
-		resp, err := http.Get(url)
-		if err == nil {
-		    resp.Body.Close()
-		}
-		return err
+	    g.Go(func() error { // <-----------------------------
+		    // Fetch the URL.
+		    resp, err := http.Get(url)
+		    if err == nil {
+		        resp.Body.Close()
+		    }
+		    return err
 	    })
 	}
 	// Wait for all HTTP fetches to complete.
-	if err := g.Wait(); err == nil { <-----------------------------
+	if err := g.Wait(); err == nil { // <-----------------------------
 	    fmt.Println("Successfully fetched all URLs.")
 	}
 
@@ -138,10 +138,10 @@ How to do it:
 
 	func main() {
 		// Set up the pipeline.
-		c := gen(2, 3)
-		out := sq(c)
+		c := gen(2, 3, 4, 5) // generate pipeline
+		out := sq(c) // square each item in the pipeline
 
-		// Consume the output: 4, 9
+		// Consume the output: 4, 9, 16, 25
 		for x := range c {
 			fmt.Println(x)
 		}
